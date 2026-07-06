@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, Typography, Box, Grid, Tooltip, makeStyles, Chip } from '@material-ui/core';
-import { useApi } from '@backstage/core-plugin-api';
+import { useApi, configApiRef } from '@backstage/core-plugin-api';
 import { kroApiRef } from '../api/KroApi';
 import { useEntity } from '@backstage/plugin-catalog-react';
 import { usePermission } from '@backstage/plugin-permission-react';
 import { showOverview } from '@terasky/backstage-plugin-kro-common';
-import { configApiRef } from '@backstage/core-plugin-api';
+import { getAnnotationPrefix, getKroAnnotation } from './annotationUtils';
 import CheckCircleIcon from '@material-ui/icons/CheckCircle';
 import CancelIcon from '@material-ui/icons/Cancel';
 import PauseCircleFilledIcon from '@material-ui/icons/PauseCircleFilled';
@@ -28,6 +28,7 @@ const KroOverviewCard = () => {
   const kroApi = useApi(kroApiRef);
   const config = useApi(configApiRef);
   const enablePermissions = config.getOptionalBoolean('kro.enablePermissions') ?? false;
+  const annotationPrefix = getAnnotationPrefix(config);
   const { allowed: canShowOverviewTemp } = usePermission({ permission: showOverview });
   const canShowOverview = enablePermissions ? canShowOverviewTemp : true;
   const [rgd, setRgd] = useState<any | null>(null);
@@ -41,17 +42,17 @@ const KroOverviewCard = () => {
     }
     const fetchResources = async () => {
       const annotations = entity.metadata.annotations || {};
-      const rgdName = annotations['terasky.backstage.io/kro-rgd-name'];
-      const rgdId = annotations['terasky.backstage.io/kro-rgd-id'];
+      const rgdName = getKroAnnotation(annotations, annotationPrefix, 'kro-rgd-name');
+      const rgdId = getKroAnnotation(annotations, annotationPrefix, 'kro-rgd-id');
       const clusterName = annotations['backstage.io/managed-by-location'].split(": ")[1];
-      const namespace = annotations['terasky.backstage.io/kro-instance-namespace'] || 'default';
+      const namespace = getKroAnnotation(annotations, annotationPrefix, 'kro-instance-namespace') || 'default';
 
       if (!rgdName || !rgdId || !clusterName) {
         return;
       }
 
       try {
-        const crdName = annotations['terasky.backstage.io/kro-rgd-crd-name'];
+        const crdName = getKroAnnotation(annotations, annotationPrefix, 'kro-rgd-crd-name');
         if (!crdName) {
           throw new Error('CRD name not found in entity annotations');
         }
@@ -61,8 +62,8 @@ const KroOverviewCard = () => {
           namespace,
           rgdName,
           rgdId,
-          instanceId: annotations['terasky.backstage.io/kro-instance-uid'],
-          instanceName: annotations['terasky.backstage.io/kro-instance-name'] || entity.metadata.name,
+          instanceId: getKroAnnotation(annotations, annotationPrefix, 'kro-instance-uid') || '',
+          instanceName: getKroAnnotation(annotations, annotationPrefix, 'kro-instance-name') || entity.metadata.name,
           crdName,
         });
 
@@ -80,7 +81,8 @@ const KroOverviewCard = () => {
       }
     };
     fetchResources();
-  }, [kroApi, entity, canShowOverview]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kroApi, entity, canShowOverview, annotationPrefix]);
 
   if (!canShowOverview) {
     return (
@@ -142,7 +144,7 @@ const KroOverviewCard = () => {
               </Grid>
               <Grid item xs={12} sm={6}>
                 <Typography variant="subtitle1" style={{ fontWeight: 'bold', color: 'gray' }}>Instance Name</Typography>
-                <Typography variant="body2">{entity.metadata?.annotations?.['terasky.backstage.io/kro-instance-name']}</Typography>
+                <Typography variant="body2">{getKroAnnotation(entity.metadata?.annotations, annotationPrefix, 'kro-instance-name')}</Typography>
               </Grid>
               <Grid item xs={12} sm={6}>
                 <Typography variant="subtitle1" style={{ fontWeight: 'bold', color: 'gray' }}>Instance State</Typography>
@@ -168,7 +170,7 @@ const KroOverviewCard = () => {
                 {isClusterScoped ? (
                   <Chip label="Cluster-Scoped" size="small" style={{ backgroundColor: '#e3f2fd', color: '#1565c0', fontWeight: 'bold' }} />
                 ) : (
-                  <Typography variant="body2">{entity.metadata?.annotations?.['terasky.backstage.io/kro-instance-namespace'] || 'default'}</Typography>
+                  <Typography variant="body2">{getKroAnnotation(entity.metadata?.annotations, annotationPrefix, 'kro-instance-namespace') || 'default'}</Typography>
                 )}
               </Grid>
               <Grid item xs={12} sm={6}>

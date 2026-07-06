@@ -85,6 +85,7 @@ const mockKroApi = {
 
 const mockConfig = {
   getOptionalBoolean: jest.fn().mockReturnValue(false),
+  getOptionalString: jest.fn().mockReturnValue(undefined),
 };
 
 describe('KroOverviewCard', () => {

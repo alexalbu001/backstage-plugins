@@ -33,6 +33,7 @@ import ReactFlow, { ReactFlowProvider, MiniMap, Controls, Background, Node, Edge
 import dagre from 'dagre';
 import { usePermission } from '@backstage/plugin-permission-react';
 import { showResourceGraph } from '@terasky/backstage-plugin-kro-common';
+import { getAnnotationPrefix, getKroAnnotation } from './annotationUtils';
 
 const useStyles = makeStyles((theme) => ({
     drawer: {
@@ -499,6 +500,7 @@ const KroResourceGraph = () => {
     const kroApi = useApi(kroApiRef);
     const config = useApi(configApiRef);
   const enablePermissions = config.getOptionalBoolean('kro.enablePermissions') ?? false;
+  const annotationPrefix = getAnnotationPrefix(config);
     const [resources, setResources] = useState<Array<KubernetesObject>>([]);
     const [selectedResource, setSelectedResource] = useState<KubernetesObject | null>(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -544,8 +546,8 @@ const KroResourceGraph = () => {
     const rgdNode = resourceList.find(r => r.kind === 'ResourceGraphDefinition');
     const crdNode = resourceList.find(r => r.kind === 'CustomResourceDefinition');
     const instanceNode = resourceList.find(r => 
-      r.metadata?.labels?.['kro.run/resource-graph-definition-id'] === entity.metadata.annotations?.['terasky.backstage.io/kro-rgd-id'] &&
-      r.metadata?.uid === entity.metadata.annotations?.['terasky.backstage.io/kro-instance-uid']
+      r.metadata?.labels?.['kro.run/resource-graph-definition-id'] === getKroAnnotation(entity.metadata.annotations, annotationPrefix, 'kro-rgd-id') &&
+      r.metadata?.uid === getKroAnnotation(entity.metadata.annotations, annotationPrefix, 'kro-instance-uid')
     );
 
     const localEdges: any[] = [];
@@ -645,7 +647,7 @@ const KroResourceGraph = () => {
         return 'Instance';
       }
       // Check if it's the top-level instance
-      if (resource.metadata?.uid === entity.metadata.annotations?.['terasky.backstage.io/kro-instance-uid']) {
+      if (resource.metadata?.uid === getKroAnnotation(entity.metadata.annotations, annotationPrefix, 'kro-instance-uid')) {
         return 'Instance';
       }
       return 'Resource';
@@ -799,11 +801,11 @@ const KroResourceGraph = () => {
 
       const fetchResources = async () => {
       const annotations = entity.metadata.annotations || {};
-      const rgdName = annotations['terasky.backstage.io/kro-rgd-name'];
-      const rgdId = annotations['terasky.backstage.io/kro-rgd-id'];
-      const instanceId = annotations['terasky.backstage.io/kro-instance-uid'];
+      const rgdName = getKroAnnotation(annotations, annotationPrefix, 'kro-rgd-name');
+      const rgdId = getKroAnnotation(annotations, annotationPrefix, 'kro-rgd-id');
+      const instanceId = getKroAnnotation(annotations, annotationPrefix, 'kro-instance-uid');
       const clusterName = annotations['backstage.io/managed-by-location'].split(": ")[1];
-      const namespace = annotations['terasky.backstage.io/kro-instance-namespace'] || 'default';
+      const namespace = getKroAnnotation(annotations, annotationPrefix, 'kro-instance-namespace') || 'default';
 
       if (!rgdName || !rgdId || !instanceId || !clusterName) {
                 setLoading(false);
@@ -811,7 +813,7 @@ const KroResourceGraph = () => {
             }
 
       try {
-        const crdName = annotations['terasky.backstage.io/kro-rgd-crd-name'];
+        const crdName = getKroAnnotation(annotations, annotationPrefix, 'kro-rgd-crd-name');
         if (!crdName) {
           throw new Error('CRD name not found in entity annotations');
         }
@@ -875,7 +877,7 @@ const KroResourceGraph = () => {
 
         const rawResources = await fetchAllResources(
           instanceId,
-          annotations['terasky.backstage.io/kro-instance-name'] || entity.metadata.name,
+          getKroAnnotation(annotations, annotationPrefix, 'kro-instance-name') || entity.metadata.name,
           rgdName,
           rgdId,
           crdName,
@@ -913,7 +915,7 @@ const KroResourceGraph = () => {
           rgdName,
           rgdId,
           instanceId,
-          instanceName: annotations['terasky.backstage.io/kro-instance-name'] || entity.metadata.name,
+          instanceName: getKroAnnotation(annotations, annotationPrefix, 'kro-instance-name') || entity.metadata.name,
           crdName,
         });
 
