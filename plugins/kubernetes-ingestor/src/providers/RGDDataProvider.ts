@@ -113,10 +113,12 @@ export class RGDDataProvider {
 
             allFetchedObjects.push(enrichedRGD);
           }
-        } catch (error) {
-          this.logger.debug(
-            `Failed to fetch RGDs for cluster ${clusterName}: ${error}`,
-          );
+        } catch (error: any) {
+          if (error?.message?.includes('403') || error?.message?.includes('Forbidden')) {
+            this.logger.warn(`Cluster ${clusterName}: permission denied accessing KRO APIs. Verify the service account has read access to kro.run resources.`);
+          } else {
+            this.logger.warn(`Failed to fetch RGDs for cluster ${clusterName}: ${error}`);
+          }
         }
       }
 

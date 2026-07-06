@@ -36,7 +36,12 @@ export class XRDDataProvider {
       }
 
       const ingestAllXRDs = this.config.getOptionalBoolean('kubernetesIngestor.crossplane.xrds.ingestAllXRDs') ?? false;
-      let allFetchedObjects: any[] = [];
+      // Collect XRDs and compositions from all clusters first, then build the xrdMap once.
+      // Previously, xrdMap processing ran inside the cluster loop after concatenating to a
+      // shared allFetchedObjects array, causing O(n²) reprocessing of all prior clusters'
+      // XRDs on each iteration.
+      const allFetchedObjects: any[] = [];
+      const allFetchedCompositions: any[] = [];
       const xrdMap = new Map<string, any>();
 
       for (const clusterName of clusters) {
@@ -54,8 +59,12 @@ export class XRDDataProvider {
             }) || [];
             v1Available = true;
             this.logger.info(`Cluster ${clusterName} has Crossplane v1 API available`);
-          } catch (error) {
-            this.logger.info(`Cluster ${clusterName} does not have Crossplane v1 API available`);
+          } catch (error: any) {
+            if (error?.message?.includes('403') || error?.message?.includes('Forbidden')) {
+              this.logger.warn(`Cluster ${clusterName}: permission denied accessing Crossplane v1 API. Verify the service account has read access to apiextensions.crossplane.io resources.`);
+            } else {
+              this.logger.info(`Cluster ${clusterName} does not have Crossplane v1 API available`);
+            }
           }
 
           try {
@@ -65,8 +74,12 @@ export class XRDDataProvider {
             }) || [];
             v2Available = true;
             this.logger.info(`Cluster ${clusterName} has Crossplane v2 API available`);
-          } catch (error) {
-            this.logger.info(`Cluster ${clusterName} does not have Crossplane v2 API available`);
+          } catch (error: any) {
+            if (error?.message?.includes('403') || error?.message?.includes('Forbidden')) {
+              this.logger.warn(`Cluster ${clusterName}: permission denied accessing Crossplane v2 API. Verify the service account has read access to apiextensions.crossplane.io resources.`);
+            } else {
+              this.logger.info(`Cluster ${clusterName} does not have Crossplane v2 API available`);
+            }
           }
 
           if (!v1Available && !v2Available) {
@@ -89,11 +102,9 @@ export class XRDDataProvider {
           const v2Items = Array.isArray(v2XRDs) ? v2XRDs : [];
           
           const fetchedResources = [...v1Items, ...v2Items].map((resource: any) => {
-            // Detect Crossplane version and scope
             const isV2 = !!resource.spec?.scope;
             const crossplaneVersion = isV2 ? 'v2' : 'v1';
             const scope = resource.spec?.scope || (isV2 ? 'LegacyCluster' : 'Cluster');
-            // Attach the generated CRD if present
             const generatedCRD = crdMap.get(resource.metadata.name);
             return {
               ...resource,
@@ -116,7 +127,6 @@ export class XRDDataProvider {
                 return false;
               }
 
-              // Only require claimNames.kind for v1 and v2-LegacyCluster XRDs
               const isV2 = resource.apiVersion === 'apiextensions.crossplane.io/v2';
               const scope = resource.spec?.scope || (isV2 ? 'Namespaced' : 'Cluster');
               const isLegacyCluster = isV2 && scope === 'LegacyCluster';
@@ -127,79 +137,73 @@ export class XRDDataProvider {
               if (isV2 && isLegacyCluster && !resource.spec?.claimNames?.kind) {
                 return false;
               }
-              // For v2 Cluster/Namespaced, allow through even if claimNames is missing
               return true;
             });
 
-          allFetchedObjects = allFetchedObjects.concat(filteredObjects);
+          allFetchedObjects.push(...filteredObjects);
 
-          // Fetch all compositions from the cluster
+          // Collect compositions; they are matched to XRDs after the loop
           const compositions = await this.resourceFetcher.fetchResources({
             clusterName,
             resourcePath: 'apiextensions.crossplane.io/v1/compositions',
           }) || [];
 
           const compositionItems = Array.isArray(compositions) ? compositions : [];
-          
-          const fetchedCompositions = compositionItems.map((resource: any) => ({
-            ...resource,
-            clusterName,
-            clusterEndpoint: clusterName,
-          }));
-
-          // Group XRDs by their name and add clusters and compositions information
-          allFetchedObjects.forEach(xrd => {
-            const xrdName = xrd.metadata.name;
-            const compositeType = xrd.status?.controllers?.compositeResourceType;
-            
-            // Check if compositeType exists and has valid values
-            if (!compositeType || !compositeType.kind || !compositeType.apiVersion || compositeType.kind === "" || compositeType.apiVersion === "") {
-              this.logger.error(
-                `XRD ${xrdName} has invalid or missing compositeResourceType controllers status. Kind: ${compositeType?.kind}, ApiVersion: ${compositeType?.apiVersion}. Skipping created a Software Template for this XRD.`,
-              );
-              return; // Skip this XRD
-            }
-
-            if (!xrdMap.has(xrdName)) {
-              xrdMap.set(xrdName, {
-                ...xrd,
-                clusters: [xrd.clusterName],
-                clusterDetails: [
-                  { name: xrd.clusterName, url: xrd.clusterEndpoint },
-                ],
-                compositions: [],
-                generatedCRD: xrd.generatedCRD,
-              });
-            } else {
-              const existingXrd = xrdMap.get(xrdName);
-              if (!existingXrd.clusters.includes(xrd.clusterName)) {
-                existingXrd.clusters.push(xrd.clusterName);
-                existingXrd.clusterDetails.push({
-                  name: xrd.clusterName,
-                  url: xrd.clusterEndpoint,
-                });
-              }
-            }
-          });
-
-          // Add compositions to the corresponding XRDs
-          fetchedCompositions.forEach(composition => {
-            const { apiVersion, kind } = composition.spec.compositeTypeRef;
-            xrdMap.forEach(xrd => {
-              const { apiVersion: xrdApiVersion, kind: xrdKind } = xrd.status.controllers.compositeResourceType;
-              if (apiVersion === xrdApiVersion && kind === xrdKind) {
-                if (!xrd.compositions.includes(composition.metadata.name)) {
-                  xrd.compositions.push(composition.metadata.name);
-                }
-              }
-            });
-          });
+          allFetchedCompositions.push(
+            ...compositionItems.map((resource: any) => ({
+              ...resource,
+              clusterName,
+              clusterEndpoint: clusterName,
+            })),
+          );
 
         } catch (error) {
           this.logger.error(
             `Failed to fetch XRD objects for cluster ${clusterName}: ${error}`,
           );
         }
+      }
+
+      // Build xrdMap once from all collected XRDs
+      for (const xrd of allFetchedObjects) {
+        const xrdName = xrd.metadata.name;
+        const compositeType = xrd.status?.controllers?.compositeResourceType;
+
+        if (!compositeType || !compositeType.kind || !compositeType.apiVersion || compositeType.kind === '' || compositeType.apiVersion === '') {
+          this.logger.error(
+            `XRD ${xrdName} has invalid or missing compositeResourceType controllers status. Kind: ${compositeType?.kind}, ApiVersion: ${compositeType?.apiVersion}. Skipping created a Software Template for this XRD.`,
+          );
+          continue;
+        }
+
+        if (!xrdMap.has(xrdName)) {
+          xrdMap.set(xrdName, {
+            ...xrd,
+            clusters: [xrd.clusterName],
+            clusterDetails: [{ name: xrd.clusterName, url: xrd.clusterEndpoint }],
+            compositions: [],
+            generatedCRD: xrd.generatedCRD,
+          });
+        } else {
+          const existingXrd = xrdMap.get(xrdName);
+          if (!existingXrd.clusters.includes(xrd.clusterName)) {
+            existingXrd.clusters.push(xrd.clusterName);
+            existingXrd.clusterDetails.push({ name: xrd.clusterName, url: xrd.clusterEndpoint });
+          }
+        }
+      }
+
+      // Match compositions to XRDs once after all clusters are processed
+      for (const composition of allFetchedCompositions) {
+        const { apiVersion, kind } = composition.spec.compositeTypeRef;
+        xrdMap.forEach(xrd => {
+          const { apiVersion: xrdApiVersion, kind: xrdKind } = xrd.status.controllers.compositeResourceType;
+          if (apiVersion === xrdApiVersion && kind === xrdKind) {
+            if (!xrd.compositions.includes(composition.metadata.name)) {
+              xrd.compositions.push(composition.metadata.name);
+            }
+          }
+        });
       }
 
       return Array.from(xrdMap.values());
