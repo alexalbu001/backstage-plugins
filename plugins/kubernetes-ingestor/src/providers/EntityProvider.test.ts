@@ -107,8 +107,11 @@ describe('KubernetesEntityProvider', () => {
 
   const mockResourceFetcher = {
     fetchResource: jest.fn(),
-    fetchResources: jest.fn(),
+    fetchResources: jest.fn().mockResolvedValue([]),
     proxyKubernetesRequest: jest.fn(),
+    // getClusters is the method used by DefaultKubernetesResourceFetcher
+    getClusters: jest.fn().mockResolvedValue(['test-cluster']),
+    // fetchClusters kept for legacy test compatibility
     fetchClusters: jest.fn().mockResolvedValue([
       { name: 'test-cluster', url: 'http://k8s.example.com' },
     ]),
@@ -363,9 +366,11 @@ describe('KubernetesEntityProvider', () => {
         applyMutation: jest.fn().mockResolvedValue(undefined),
       };
 
-      // Should not throw even when internal errors occur
+      // Should not throw even when internal errors occur.
+      // With getClusters() failing, activeClusters falls back to [] and no cache
+      // state exists, so there is nothing to diff — applyMutation is not called.
       await provider.connect(mockConnection as any);
-      expect(mockConnection.applyMutation).toHaveBeenCalled();
+      expect(mockConnection.applyMutation).not.toHaveBeenCalled();
     });
 
     it('should use workloadType from resource for component type', async () => {
