@@ -2,9 +2,9 @@ import {
   EntityProvider,
   EntityProviderConnection,
 } from '@backstage/plugin-catalog-node';
-import { Entity } from '@backstage/catalog-model';
+import { Entity, parseEntityRef } from '@backstage/catalog-model';
 import { Config } from '@backstage/config';
-import { LoggerService, SchedulerServiceTaskRunner } from '@backstage/backend-plugin-api';
+import { CacheService, LoggerService, SchedulerServiceTaskRunner } from '@backstage/backend-plugin-api';
 import { DefaultKubernetesResourceFetcher } from '../services';
 import { RGDDataProvider } from './RGDDataProvider';
 import { Logger } from 'winston';
@@ -19,6 +19,7 @@ export class RGDTemplateEntityProvider implements EntityProvider {
     logger: LoggerService,
     private readonly config: Config,
     private readonly resourceFetcher: DefaultKubernetesResourceFetcher,
+    private readonly cache?: CacheService,
   ) {
     this.logger = {
       silent: true,
@@ -44,6 +45,33 @@ export class RGDTemplateEntityProvider implements EntityProvider {
         }
       },
     } as unknown as Logger;
+  }
+
+  private readonly rgdRefsKey = 'k8s-ingestor:rgd-refs';
+
+  private rgdToRef(entity: Entity): string {
+    const ns = entity.metadata.namespace ?? 'default';
+    return `${entity.kind.toLowerCase()}:${ns}/${entity.metadata.name}`;
+  }
+
+  private rgdBuildStub(ref: string): Entity {
+    const parsed = parseEntityRef(ref, { defaultKind: 'Template', defaultNamespace: 'default' });
+    return {
+      apiVersion: 'backstage.io/v1alpha1',
+      kind: parsed.kind,
+      metadata: { name: parsed.name, namespace: parsed.namespace ?? 'default' },
+    } as Entity;
+  }
+
+  private async readRgdRefs(): Promise<Set<string>> {
+    const stored = await this.cache?.get<string[]>(this.rgdRefsKey);
+    return new Set(stored ?? []);
+  }
+  private async writeRgdRefs(refs: Set<string>): Promise<void> {
+    await this.cache?.set(this.rgdRefsKey, [...refs]);
+  }
+  private async clearRgdRefs(): Promise<void> {
+    await this.cache?.delete(this.rgdRefsKey);
   }
 
   private validateEntityName(entity: Entity): boolean {
@@ -84,45 +112,54 @@ export class RGDTemplateEntityProvider implements EntityProvider {
     }
     try {
       const isKROEnabled = this.config.getOptionalBoolean('kubernetesIngestor.kro.enabled') ?? false;
-      
+      const wrap = (entities: Entity[]) => entities.map(entity => ({
+        entity,
+        locationKey: `provider:${this.getProviderName()}`,
+      }));
+
       if (!isKROEnabled) {
-        await this.connection.applyMutation({
-          type: 'full',
-          entities: [],
-        });
+        // Remove all previously tracked entities
+        const prevRefs = await this.readRgdRefs();
+        if (prevRefs.size > 0) {
+          const removed = [...prevRefs].map(r => this.rgdBuildStub(r));
+          await this.connection.applyMutation({ type: 'delta', added: [], removed: wrap(removed) });
+          await this.clearRgdRefs();
+        }
         return;
       }
 
-      const rgdDataProvider = new RGDDataProvider(
-        this.resourceFetcher,
-        this.config,
-        this.logger,
-      );
+      const rgdDataProvider = new RGDDataProvider(this.resourceFetcher, this.config, this.logger);
 
       let allEntities: Entity[] = [];
 
       if (this.config.getOptionalBoolean('kubernetesIngestor.kro.rgds.enabled')) {
         const rgdData = await rgdDataProvider.fetchRGDObjects();
         const rgdIngestOnlyAsAPI = this.config.getOptionalBoolean('kubernetesIngestor.kro.rgds.ingestOnlyAsAPI') ?? false;
-        
-        // Only generate templates if not ingestOnlyAsAPI
+
         if (!rgdIngestOnlyAsAPI) {
-          const rgdEntities = rgdData.flatMap((rgd: any) => this.translateRGDToTemplate(rgd));
-          allEntities = allEntities.concat(rgdEntities);
+          allEntities = allEntities.concat(rgdData.flatMap((rgd: any) => this.translateRGDToTemplate(rgd)));
         }
-        
-        // Always generate API entities
-        const APIEntities = rgdData.flatMap((rgd: any) => this.translateRGDToAPI(rgd));
-        allEntities = allEntities.concat(APIEntities);
+        allEntities = allEntities.concat(rgdData.flatMap((rgd: any) => this.translateRGDToAPI(rgd)));
       }
 
+      const currentRefs = new Set(allEntities.map(e => this.rgdToRef(e)));
+      const prevRefs = await this.readRgdRefs();
+
+      const added = allEntities.filter(e => !prevRefs.has(this.rgdToRef(e)));
+      const removed = [...prevRefs]
+        .filter(r => !currentRefs.has(r))
+        .map(r => this.rgdBuildStub(r));
+
       await this.connection.applyMutation({
-        type: 'full',
-        entities: allEntities.map(entity => ({
-          entity,
-          locationKey: `provider:${this.getProviderName()}`,
-        })),
+        type: 'delta',
+        added: wrap(added),
+        removed: wrap(removed),
       });
+      await this.writeRgdRefs(currentRefs);
+
+      this.logger.info(
+        `RGD delta sync: +${added.length} / -${removed.length} (total=${allEntities.length})`,
+      );
     } catch (error) {
       this.logger.error(`Failed to run RGDTemplateEntityProvider: ${error}`);
     }

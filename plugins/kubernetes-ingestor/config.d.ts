@@ -484,6 +484,22 @@ export interface Config {
       };
     };
     /**
+     * Orphan-protection settings for delta-based ingestion.
+     * Controls how many consecutive scheduled runs a cluster must be absent from
+     * getClusters() before its entities are removed from the catalog.
+     */
+    orphanProtection?: {
+      /**
+       * Number of consecutive scheduled runs a cluster must be absent from
+       * getClusters() before its entities are removed from the catalog.
+       * Defaults to 3. Set to 0 to disable grace period (immediate removal).
+       * Increase for environments where cluster registration is slow.
+       * @default 3
+       * @visibility frontend
+       */
+      gracePeriodRuns?: number;
+    };
+    /**
      * Configuration for generic CRD template generation
      */
     genericCRDTemplates?: {

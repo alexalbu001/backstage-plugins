@@ -67,6 +67,7 @@ export const catalogModuleKubernetesIngestor = createBackendModule({
         auth: coreServices.auth,
         urlReader: coreServices.urlReader,
         events: eventsServiceRef,
+        cache: coreServices.cache,
       },
       async init({
         catalog,
@@ -77,6 +78,7 @@ export const catalogModuleKubernetesIngestor = createBackendModule({
         auth,
         urlReader,
         events,
+        cache,
       }) {
         const taskRunner = scheduler.createScheduledTaskRunner({
           frequency: {
@@ -112,6 +114,7 @@ export const catalogModuleKubernetesIngestor = createBackendModule({
           config,
           resourceFetcher,
           urlReader,
+          cache,
         );
 
         const xrdTemplateEntityProvider = new XRDTemplateEntityProvider(
@@ -119,6 +122,7 @@ export const catalogModuleKubernetesIngestor = createBackendModule({
           logger,
           config,
           resourceFetcher,
+          cache,
         );
 
         const rgdTemplateEntityProvider = new RGDTemplateEntityProvider(
@@ -126,6 +130,7 @@ export const catalogModuleKubernetesIngestor = createBackendModule({
           logger,
           config,
           resourceFetcher,
+          cache,
         );
         const kroEnabled = config.getOptionalBoolean('kubernetesIngestor.kro.enabled');
         if (kroEnabled === true) {

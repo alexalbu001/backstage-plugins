@@ -4,9 +4,9 @@ import {
 } from '@backstage/plugin-catalog-node';
 import { Entity, parseEntityRef } from '@backstage/catalog-model';
 import { Config } from '@backstage/config';
-import { LoggerService, SchedulerServiceTaskRunner, UrlReaderService } from '@backstage/backend-plugin-api';
+import { CacheService, LoggerService, SchedulerServiceTaskRunner, UrlReaderService } from '@backstage/backend-plugin-api';
 import { DefaultKubernetesResourceFetcher, ApiDefinitionFetcher } from '../services';
-import { KubernetesDataProvider } from './KubernetesDataProvider';
+import { KubernetesDataProvider, WorkloadType } from './KubernetesDataProvider';
 import { Logger } from 'winston';
 import { CRDDataProvider } from './CRDDataProvider';
 import { XRDDataProvider } from './XRDDataProvider';
@@ -85,6 +85,7 @@ export class XRDTemplateEntityProvider implements EntityProvider {
     logger: LoggerService,
     private readonly config: Config,
     private readonly resourceFetcher: DefaultKubernetesResourceFetcher,
+    private readonly cache?: CacheService,
   ) {
     this.logger = {
       silent: true,
@@ -113,6 +114,32 @@ export class XRDTemplateEntityProvider implements EntityProvider {
   }
 
   private readonly logger: Logger;
+  private readonly xrdRefsKey = 'k8s-ingestor:xrd-refs';
+
+  private xrdToRef(entity: Entity): string {
+    const ns = entity.metadata.namespace ?? 'default';
+    return `${entity.kind.toLowerCase()}:${ns}/${entity.metadata.name}`;
+  }
+
+  private xrdBuildStub(ref: string): Entity {
+    const parsed = parseEntityRef(ref, { defaultKind: 'Template', defaultNamespace: 'default' });
+    return {
+      apiVersion: 'backstage.io/v1alpha1',
+      kind: parsed.kind,
+      metadata: { name: parsed.name, namespace: parsed.namespace ?? 'default' },
+    } as Entity;
+  }
+
+  private async readXrdRefs(): Promise<Set<string>> {
+    const stored = await this.cache?.get<string[]>(this.xrdRefsKey);
+    return new Set(stored ?? []);
+  }
+  private async writeXrdRefs(refs: Set<string>): Promise<void> {
+    await this.cache?.set(this.xrdRefsKey, [...refs]);
+  }
+  private async clearXrdRefs(): Promise<void> {
+    await this.cache?.delete(this.xrdRefsKey);
+  }
 
   private validateEntityName(entity: Entity): boolean {
     if (entity.metadata.name.length > 63) {
@@ -230,67 +257,63 @@ export class XRDTemplateEntityProvider implements EntityProvider {
     }
     try {
       const isCrossplaneEnabled = this.config.getOptionalBoolean('kubernetesIngestor.crossplane.enabled') ?? true;
-      
+      const wrap = (entities: Entity[]) => entities.map(entity => ({
+        entity,
+        locationKey: `provider:${this.getProviderName()}`,
+      }));
+
       if (!isCrossplaneEnabled) {
-        await this.connection.applyMutation({
-          type: 'full',
-          entities: [],
-        });
+        // Remove all previously tracked entities
+        const prevRefs = await this.readXrdRefs();
+        if (prevRefs.size > 0) {
+          const removed = [...prevRefs].map(r => this.xrdBuildStub(r));
+          await this.connection.applyMutation({ type: 'delta', added: [], removed: wrap(removed) });
+          await this.clearXrdRefs();
+        }
         return;
       }
 
-      const templateDataProvider = new XRDDataProvider(
-        this.resourceFetcher,
-        this.config,
-        this.logger,
-      );
-
-      const crdDataProvider = new CRDDataProvider(
-        this.resourceFetcher,
-        this.config,
-        this.logger,
-      );
+      const templateDataProvider = new XRDDataProvider(this.resourceFetcher, this.config, this.logger);
+      const crdDataProvider = new CRDDataProvider(this.resourceFetcher, this.config, this.logger);
 
       let allEntities: Entity[] = [];
 
-      // Fetch all CRDs once
       const crdData = await crdDataProvider.fetchCRDObjects();
 
-      if (this.config.getOptionalBoolean('kubernetesIngestor.crossplane.xrds.enabled')) {
+      if (this.config.getOptionalBoolean('kubernetesIngestor.crossplane.xrds.enabled') !== false) {
         const xrdData = await templateDataProvider.fetchXRDObjects();
         const xrdIngestOnlyAsAPI = this.config.getOptionalBoolean('kubernetesIngestor.crossplane.xrds.ingestOnlyAsAPI') ?? false;
-        
-        // Only generate templates if not ingestOnlyAsAPI
+
         if (!xrdIngestOnlyAsAPI) {
-          const xrdEntities = xrdData.flatMap((xrd: any) => this.translateXRDVersionsToTemplates(xrd));
-          allEntities = allEntities.concat(xrdEntities);
+          allEntities = allEntities.concat(xrdData.flatMap((xrd: any) => this.translateXRDVersionsToTemplates(xrd)));
         }
-        
-        // Always generate API entities
-        const APIEntities = xrdData.flatMap((xrd: any) => this.translateXRDVersionsToAPI(xrd));
-        allEntities = allEntities.concat(APIEntities);
+        allEntities = allEntities.concat(xrdData.flatMap((xrd: any) => this.translateXRDVersionsToAPI(xrd)));
       }
 
-      // Add CRD template generation
       const crdIngestOnlyAsAPI = this.config.getOptionalBoolean('kubernetesIngestor.genericCRDTemplates.ingestOnlyAsAPI') ?? false;
-      
-      // Only generate templates if not ingestOnlyAsAPI
       if (!crdIngestOnlyAsAPI) {
-        const crdEntities = crdData.flatMap(crd => this.translateCRDToTemplate(crd));
-        allEntities = allEntities.concat(crdEntities);
+        allEntities = allEntities.concat(crdData.flatMap(crd => this.translateCRDToTemplate(crd)));
       }
-      
-      // Always generate API entities
-      const CRDAPIEntities = crdData.flatMap(crd => this.translateCRDVersionsToAPI(crd));
-      allEntities = allEntities.concat(CRDAPIEntities);
+      allEntities = allEntities.concat(crdData.flatMap(crd => this.translateCRDVersionsToAPI(crd)));
+
+      const currentRefs = new Set(allEntities.map(e => this.xrdToRef(e)));
+      const prevRefs = await this.readXrdRefs();
+
+      const added = allEntities.filter(e => !prevRefs.has(this.xrdToRef(e)));
+      const removed = [...prevRefs]
+        .filter(r => !currentRefs.has(r))
+        .map(r => this.xrdBuildStub(r));
 
       await this.connection.applyMutation({
-        type: 'full',
-        entities: allEntities.map(entity => ({
-          entity,
-          locationKey: `provider:${this.getProviderName()}`,
-        })),
+        type: 'delta',
+        added: wrap(added),
+        removed: wrap(removed),
       });
+      await this.writeXrdRefs(currentRefs);
+
+      this.logger.info(
+        `XRD delta sync: +${added.length} / -${removed.length} (total=${allEntities.length})`,
+      );
     } catch (error) {
       this.logger.error(`Failed to run TemplateEntityProvider: ${error}`);
     }
@@ -2406,6 +2429,7 @@ export class KubernetesEntityProvider implements EntityProvider {
   private cachedClaimKindLookup: Set<string> = new Set();
   private mutationMutex: Promise<void> = Promise.resolve();
   private fullSyncCompleted = false;
+  private readonly orphanGraceRuns: number;
 
   constructor(
     private readonly taskRunner: SchedulerServiceTaskRunner,
@@ -2413,7 +2437,11 @@ export class KubernetesEntityProvider implements EntityProvider {
     private readonly config: Config,
     private readonly resourceFetcher: DefaultKubernetesResourceFetcher,
     urlReader?: UrlReaderService,
+    private readonly cache?: CacheService,
   ) {
+    this.orphanGraceRuns = config.getOptionalNumber(
+      'kubernetesIngestor.orphanProtection.gracePeriodRuns',
+    ) ?? 3;
     this.logger = {
       silent: true,
       format: undefined,
@@ -2439,6 +2467,40 @@ export class KubernetesEntityProvider implements EntityProvider {
       },
     } as unknown as Logger;
     this.apiDefinitionFetcher = new ApiDefinitionFetcher(resourceFetcher, config, logger, urlReader);
+  }
+
+  // ── Cache key helpers ──────────────────────────────────────────────────────
+  private clusterRefsKey(cluster: string): string {
+    return `k8s-ingestor:refs:${cluster}`;
+  }
+  private clusterMissesKey(cluster: string): string {
+    return `k8s-ingestor:misses:${cluster}`;
+  }
+  private readonly knownClustersKey = 'k8s-ingestor:known-clusters';
+
+  private async readClusterRefs(cluster: string): Promise<Set<string>> {
+    const stored = await this.cache?.get<string[]>(this.clusterRefsKey(cluster));
+    return new Set(stored ?? []);
+  }
+  private async writeClusterRefs(cluster: string, refs: Set<string>): Promise<void> {
+    await this.cache?.set(this.clusterRefsKey(cluster), [...refs]);
+  }
+  private async readMisses(cluster: string): Promise<number> {
+    return (await this.cache?.get<number>(this.clusterMissesKey(cluster))) ?? 0;
+  }
+  private async writeMisses(cluster: string, n: number): Promise<void> {
+    await this.cache?.set(this.clusterMissesKey(cluster), n);
+  }
+  private async clearCluster(cluster: string): Promise<void> {
+    await this.cache?.delete(this.clusterRefsKey(cluster));
+    await this.cache?.delete(this.clusterMissesKey(cluster));
+  }
+  private async readKnownClusters(): Promise<Set<string>> {
+    const stored = await this.cache?.get<string[]>(this.knownClustersKey);
+    return new Set(stored ?? []);
+  }
+  private async writeKnownClusters(clusters: Set<string>): Promise<void> {
+    await this.cache?.set(this.knownClustersKey, [...clusters]);
   }
 
   private validateEntityName(entity: Entity): boolean {
@@ -2570,6 +2632,20 @@ export class KubernetesEntityProvider implements EntityProvider {
     return 'KubernetesEntityProvider';
   }
 
+  private toRef(entity: Entity): string {
+    const ns = entity.metadata.namespace ?? 'default';
+    return `${entity.kind.toLowerCase()}:${ns}/${entity.metadata.name}`;
+  }
+
+  private buildStub(ref: string): Entity {
+    const parsed = parseEntityRef(ref, { defaultKind: 'Component', defaultNamespace: 'default' });
+    return {
+      apiVersion: 'backstage.io/v1alpha1',
+      kind: parsed.kind,
+      metadata: { name: parsed.name, namespace: parsed.namespace ?? 'default' },
+    } as Entity;
+  }
+
   private acquireMutationLock(): { promise: Promise<void>; release: () => void } {
     let release: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
@@ -2600,95 +2676,164 @@ export class KubernetesEntityProvider implements EntityProvider {
       const isKROEnabled = this.config.getOptionalBoolean('kubernetesIngestor.kro.enabled') ?? false;
       const componentsEnabled = this.config.getOptionalBoolean('kubernetesIngestor.components.enabled') ?? true;
 
-      if (componentsEnabled) {
-        // Initialize providers
-        const kubernetesDataProvider = new KubernetesDataProvider(
+      if (!componentsEnabled) {
+        // Remove all tracked entities across all known clusters and clear cache
+        const knownClusters = await this.readKnownClusters();
+        for (const cluster of knownClusters) {
+          const prevRefs = await this.readClusterRefs(cluster);
+          if (prevRefs.size > 0) {
+            const removed = [...prevRefs].map(r => this.buildStub(r));
+            const lock = this.acquireMutationLock();
+            await lock.promise;
+            try {
+              await this.applyDeltaMutation([], removed);
+              await this.clearCluster(cluster);
+            } finally {
+              lock.release();
+            }
+          }
+        }
+        await this.writeKnownClusters(new Set());
+        this.fullSyncCompleted = true;
+        return;
+      }
+
+      const kubernetesDataProvider = new KubernetesDataProvider(
+        this.resourceFetcher,
+        this.config,
+        this.logger,
+      );
+
+      let compositeKindLookup: { [key: string]: any } = {};
+      let rgdLookup: { [key: string]: any } = {};
+      let claimKindLookup: Set<string> = new Set();
+
+      if (isCrossplaneEnabled) {
+        const xrdDataProvider = new XRDDataProvider(
           this.resourceFetcher,
           this.config,
           this.logger,
         );
+        compositeKindLookup = await xrdDataProvider.buildCompositeKindLookup();
+        claimKindLookup = await xrdDataProvider.buildClaimKindLookup();
+      }
 
-        let compositeKindLookup: { [key: string]: any } = {};
-        let rgdLookup: { [key: string]: any } = {};
-        let claimKindLookup: Set<string> = new Set();
-        let xrdDataProvider;
-        let rgdDataProvider;
-        
-        // Only initialize Crossplane providers if enabled
-        if (isCrossplaneEnabled) {
-          xrdDataProvider = new XRDDataProvider(
-            this.resourceFetcher,
-            this.config,
-            this.logger,
-          );
-          compositeKindLookup = await xrdDataProvider.buildCompositeKindLookup();
-          // Build claim kind lookup for delta update classification
-          claimKindLookup = await xrdDataProvider.buildClaimKindLookup();
-        }
+      if (isKROEnabled) {
+        const rgdDataProvider = new RGDDataProvider(
+          this.resourceFetcher,
+          this.config,
+          this.logger,
+        );
+        rgdLookup = await rgdDataProvider.buildRGDLookup();
+      }
 
-        // Only initialize KRO providers if enabled
-        if (isKROEnabled) {
-          rgdDataProvider = new RGDDataProvider(
-            this.resourceFetcher,
-            this.config,
-            this.logger,
-          );
-          rgdLookup = await rgdDataProvider.buildRGDLookup();
-        }
+      // Build base workload types and CRD mapping once, shared across all clusters
+      const baseWorkloadTypes: WorkloadType[] = await kubernetesDataProvider.buildBaseWorkloadTypes();
+      const crdMapping = await kubernetesDataProvider.fetchCRDMapping();
 
-        // Fetch all Kubernetes resources and build a CRD mapping
-        const kubernetesData = await kubernetesDataProvider.fetchKubernetesObjects();
-        const crdMapping = await kubernetesDataProvider.fetchCRDMapping();
-        let claimCount = 0; let compositeCount = 0; let k8sCount = 0; let kroCount = 0;
-        
-        // Process resources and collect entities (including API entities)
-        const allEntities: Entity[] = [];
-        
-        for (const k8s of kubernetesData) {
-          if (!k8s) continue;
-          const { entities, resourceType } = await this.classifyAndTranslateResource(
-            k8s, isCrossplaneEnabled, isKROEnabled, compositeKindLookup, rgdLookup, crdMapping,
-          );
-          if (resourceType === 'claim' && entities.length > 0) claimCount++;
-          else if (resourceType === 'composite' && entities.length > 0) compositeCount++;
-          else if (resourceType === 'kro') kroCount++;
-          else if (resourceType === 'k8s') k8sCount++;
-          allEntities.push(...entities);
-        }
+      // Cache lookups for delta (event-bus) updates
+      this.cachedCompositeKindLookup = compositeKindLookup;
+      this.cachedRgdLookup = rgdLookup;
+      this.cachedCrdMapping = crdMapping;
+      this.cachedClaimKindLookup = claimKindLookup;
 
-        // Cache lookups for delta updates
-        this.cachedCompositeKindLookup = compositeKindLookup;
-        this.cachedRgdLookup = rgdLookup;
-        this.cachedCrdMapping = crdMapping;
-        this.cachedClaimKindLookup = claimKindLookup;
-
-        const lock = this.acquireMutationLock();
-        await lock.promise;
-        try {
-          await this.connection.applyMutation({
-            type: 'full',
-            entities: allEntities.map((entity: Entity) => ({
-              entity,
-              locationKey: `provider:${this.getProviderName()}`,
-            })),
-          });
-          this.fullSyncCompleted = true;
-        } finally {
-          lock.release();
-        }
+      // Discover active clusters
+      const allowedClusters = this.config.getOptionalStringArray('kubernetesIngestor.allowedClusterNames');
+      let activeClusters: string[];
+      if (allowedClusters) {
+        activeClusters = allowedClusters;
       } else {
-        const lock = this.acquireMutationLock();
-        await lock.promise;
         try {
-          await this.connection.applyMutation({
-            type: 'full',
-            entities: [],
-          });
-          this.fullSyncCompleted = true;
-        } finally {
-          lock.release();
+          activeClusters = await this.resourceFetcher.getClusters();
+        } catch (error) {
+          this.logger.error('Failed to discover clusters', error instanceof Error ? error : { error: String(error) });
+          activeClusters = [];
         }
       }
+
+      const activeClusterSet = new Set(activeClusters);
+
+      // Fetch + translate + delta-mutate per cluster in parallel
+      await Promise.allSettled(activeClusters.map(async clusterName => {
+        try {
+          const resources = await kubernetesDataProvider.fetchForCluster(clusterName, baseWorkloadTypes);
+
+          const entities: Entity[] = [];
+          let claimCount = 0; let compositeCount = 0; let k8sCount = 0; let kroCount = 0;
+          for (const k8s of resources) {
+            if (!k8s) continue;
+            const { entities: translated, resourceType } = await this.classifyAndTranslateResource(
+              k8s, isCrossplaneEnabled, isKROEnabled, compositeKindLookup, rgdLookup, crdMapping,
+            );
+            if (resourceType === 'claim' && translated.length > 0) claimCount++;
+            else if (resourceType === 'composite' && translated.length > 0) compositeCount++;
+            else if (resourceType === 'kro') kroCount++;
+            else if (resourceType === 'k8s') k8sCount++;
+            entities.push(...translated);
+          }
+
+          const currentRefs = new Set(entities.map(e => this.toRef(e)));
+          const prevRefs = await this.readClusterRefs(clusterName);
+
+          const added = entities.filter(e => !prevRefs.has(this.toRef(e)));
+          const removed = [...prevRefs]
+            .filter(r => !currentRefs.has(r))
+            .map(r => this.buildStub(r));
+
+          const lock = this.acquireMutationLock();
+          await lock.promise;
+          try {
+            await this.applyDeltaMutation(added, removed);
+            await this.writeClusterRefs(clusterName, currentRefs);
+            await this.writeMisses(clusterName, 0);
+          } finally {
+            lock.release();
+          }
+
+          this.logger.info(
+            `Delta sync for cluster ${clusterName}: +${added.length} / -${removed.length} ` +
+            `(k8s=${k8sCount} claims=${claimCount} composites=${compositeCount} kro=${kroCount})`,
+          );
+        } catch (error) {
+          this.logger.error(`Failed to sync cluster ${clusterName}: ${error}`);
+        }
+      }));
+
+      // Grace-period orphan check: handle clusters that disappeared from getClusters()
+      const knownClusters = await this.readKnownClusters();
+      const updatedKnownClusters = new Set([...knownClusters, ...activeClusters]);
+
+      for (const cluster of knownClusters) {
+        if (activeClusterSet.has(cluster)) continue; // already synced above
+
+        const misses = (await this.readMisses(cluster)) + 1;
+        if (misses >= this.orphanGraceRuns) {
+          const prevRefs = await this.readClusterRefs(cluster);
+          if (prevRefs.size > 0) {
+            const removed = [...prevRefs].map(r => this.buildStub(r));
+            const lock = this.acquireMutationLock();
+            await lock.promise;
+            try {
+              await this.applyDeltaMutation([], removed);
+            } finally {
+              lock.release();
+            }
+          }
+          await this.clearCluster(cluster);
+          updatedKnownClusters.delete(cluster);
+          this.logger.info(
+            `Cluster ${cluster} removed from catalog after ${misses} consecutive absences (grace=${this.orphanGraceRuns})`,
+          );
+        } else {
+          await this.writeMisses(cluster, misses);
+          this.logger.debug(
+            `Cluster ${cluster} absent (miss ${misses}/${this.orphanGraceRuns}), grace period active`,
+          );
+        }
+      }
+
+      await this.writeKnownClusters(updatedKnownClusters);
+      this.fullSyncCompleted = true;
     } catch (error) {
       this.fullSyncCompleted = false;
       this.logger.error(`Failed to run KubernetesEntityProvider: ${error}`);
