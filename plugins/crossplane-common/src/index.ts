@@ -18,11 +18,19 @@ export const getAnnotation = (
 export const hasCrossplaneResourceAnnotation = (
   annotations: Record<string, string> | undefined,
   annotationPrefix: string = DEFAULT_ANNOTATION_PREFIX,
-): boolean =>
-  Boolean(annotations?.[`${annotationPrefix}/crossplane-resource`]) ||
-  (annotationPrefix !== DEFAULT_ANNOTATION_PREFIX
-    ? Boolean(annotations?.[`${DEFAULT_ANNOTATION_PREFIX}/crossplane-resource`])
-    : false);
+): boolean => {
+  if (!annotations) return false;
+  // Fast path: check the requested prefix first
+  if (Boolean(annotations[`${annotationPrefix}/crossplane-resource`])) return true;
+  // When called with the default prefix (e.g. from entity blueprint filters that have no
+  // access to app config), also scan every annotation key so that a custom annotationPrefix
+  // configured in kubernetesIngestor is still recognised.
+  if (annotationPrefix === DEFAULT_ANNOTATION_PREFIX) {
+    return Object.keys(annotations).some(key => key.endsWith('/crossplane-resource'));
+  }
+  // When called with a custom prefix, fall back to the default as well
+  return Boolean(annotations[`${DEFAULT_ANNOTATION_PREFIX}/crossplane-resource`]);
+};
 
 export const listClaimsPermission = createPermission({
   name: 'crossplane.claims.list',

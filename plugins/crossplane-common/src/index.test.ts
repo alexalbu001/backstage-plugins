@@ -65,9 +65,25 @@ describe('crossplane-common', () => {
         expect(hasCrossplaneResourceAnnotation(annotations, 'custom.prefix')).toBe(false);
       });
 
-      it('should not fallback when prefix is DEFAULT_ANNOTATION_PREFIX', () => {
+      it('should return false for empty annotations when prefix is DEFAULT_ANNOTATION_PREFIX', () => {
         const annotations = {};
         expect(hasCrossplaneResourceAnnotation(annotations, DEFAULT_ANNOTATION_PREFIX)).toBe(false);
+      });
+
+      it('should detect custom annotationPrefix when called with DEFAULT_ANNOTATION_PREFIX (blueprint filter case)', () => {
+        const annotations = { 'spectrocloud.backstage.io/crossplane-resource': 'true' };
+        expect(hasCrossplaneResourceAnnotation(annotations)).toBe(true);
+        expect(hasCrossplaneResourceAnnotation(annotations, DEFAULT_ANNOTATION_PREFIX)).toBe(true);
+      });
+
+      it('should not detect custom prefix annotation when a different custom prefix is explicitly passed', () => {
+        const annotations = { 'other.prefix/crossplane-resource': 'true' };
+        expect(hasCrossplaneResourceAnnotation(annotations, 'custom.prefix')).toBe(false);
+      });
+
+      it('should match any truthy annotation value during prefix scan', () => {
+        const annotations = { 'spectrocloud.backstage.io/crossplane-resource': 'xrd-test' };
+        expect(hasCrossplaneResourceAnnotation(annotations)).toBe(true);
       });
     });
   });
