@@ -30,8 +30,10 @@ The Kubernetes Ingestor backend plugin is a catalog entity provider that automat
 - Customizable outputs
 
 ### Entity Management
-- Automatic updates
-- Delta/incremental mutations for real-time catalog updates
+- Delta-based periodic sync — every scheduled run applies only diffs, never a full replacement
+- Event-driven incremental mutations for real-time catalog updates
+- CacheService-backed state survives restarts and is shared across replicas
+- Orphan grace period prevents premature entity deletion when clusters are temporarily unavailable
 - Relationship mapping
 - System organization
 - Metadata handling
@@ -43,10 +45,10 @@ The Kubernetes Ingestor backend plugin is a catalog entity provider that automat
 
 ### Entity Provider
 The core component that:
-- Discovers resources
+- Discovers resources per cluster in parallel
 - Creates entities
 - Maintains relationships
-- Updates catalog (full sync and delta/incremental mutations)
+- Updates catalog via delta mutations backed by the Backstage CacheService
 
 ### Template Generator
 Generates software templates for:  
@@ -68,20 +70,28 @@ Handles API-related tasks:
 
 ### Resource Processing
 The plugin processes resources through:
-1. Discovery phase
-2. Filtering phase
-3. Entity creation
-4. Relationship mapping
-5. Catalog update (full sync or delta mutation)
+1. Discovery phase — `getClusters()` returns active clusters each run
+2. Per-cluster parallel fetch — `fetchForCluster()` fetches and enriches resources for one cluster
+3. Filtering phase — exclusion annotations, namespace exclusions, annotated-only mode
+4. Entity creation and relationship mapping
+5. Delta mutation — `added`/`removed` diff against `CacheService`-backed per-cluster entity-ref sets
 
 ### Delta/Incremental Mutations
-The entity provider supports real-time incremental updates via the `deltaUpdate` method, allowing individual resources to be added, updated, or removed from the catalog without performing a full re-sync. This is useful for event-driven architectures where a Kubernetes controller or webhook can push change events to the plugin.
+
+#### Periodic delta sync
+Every scheduled run uses `type: delta` mutations exclusively — the catalog is never atomically replaced. The plugin reads the previous entity-ref set for each cluster from the Backstage `CacheService`, computes the diff against the current run's entities, and applies only the changes. The cache persists across restarts and is shared across replicas when a shared cache backend (Redis/Memcached) is configured.
+
+#### Orphan protection
+Clusters that disappear from `getClusters()` accumulate a miss counter in the cache. Their entities are only removed from the catalog after `orphanProtection.gracePeriodRuns` consecutive absences (default: 3). This prevents spurious deletions when a dynamic cluster provider takes time to register all clusters on startup or during rolling restarts.
+
+#### Event-driven delta updates
+The entity provider also supports real-time incremental updates via the `deltaUpdate` method, allowing individual resources to be added, updated, or removed from the catalog without waiting for the next scheduled cycle. This is useful for event-driven architectures where a Kubernetes controller or webhook can push change events to the plugin.
 
 Key behaviors:
 - **Upserts**: The resource is fetched from the cluster and translated into catalog entities, which are then added or updated via a delta mutation.
 - **Deletes**: When a resource is deleted, only the resource-specific entities (Component/Resource, API) are removed. Shared System entities are preserved to avoid affecting other resources in the same namespace/system.
 - **Explicit entity names**: Delete events can include an `entityNames` array with exact entity refs (e.g., `"Component:default/my-app"`) to avoid mismatches when annotation-based naming was used.
-- **Prerequisite**: Delta updates require the initial full sync to have completed so that internal caches (CRD mappings, Crossplane lookups, KRO lookups) are populated.
+- **Prerequisite**: Event-driven delta updates require the initial periodic sync to have completed so that internal caches (CRD mappings, Crossplane lookups, KRO lookups) are populated.
 
 ### Mapping Models
 Supports various mapping models:  

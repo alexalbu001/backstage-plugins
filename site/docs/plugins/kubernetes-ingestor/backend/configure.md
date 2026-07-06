@@ -174,6 +174,14 @@ kubernetesIngestor:
         timeout: 600
   # Whether to auto add the argo cd plugins annotation to the ingested components if the ingested resources have the ArgoCD tracking annotation added to them. defaults to true
   argoIntegration: true
+  # Orphan-protection settings for delta-based ingestion.
+  # Controls how many consecutive scheduled runs a cluster must be absent from
+  # getClusters() before its entities are removed from the catalog.
+  orphanProtection:
+    # Defaults to 3. Set to 0 to disable the grace period (immediate removal).
+    # Increase this value in environments where cluster registration is slow
+    # (e.g. dynamic providers that take several minutes to register all clusters).
+    gracePeriodRuns: 3
 ```
 
 ## Cluster Authentication Requirements
@@ -1026,9 +1034,83 @@ This provides the same improved user experience as described in the XRD configur
 
 ## Delta/Incremental Mutations
 
-The `KubernetesEntityProvider` supports incremental catalog updates via its `deltaUpdate` method. Instead of waiting for the next full sync cycle, you can push individual resource changes to the provider in real time.
+The plugin uses **delta mutations exclusively** — it never issues a `type: full` mutation that would atomically replace all owned entities. This design has two complementary mechanisms:
 
-### DeltaEvent Interface
+1. **Built-in periodic delta sync** — every scheduled run computes per-cluster diffs and applies only the changes, backed by the Backstage `CacheService`.
+2. **Event-driven delta updates** — the `deltaUpdate()` method lets external systems push individual resource changes between sync cycles.
+
+### Built-in Delta Sync (CacheService-backed)
+
+Every time the scheduled task fires, the plugin:
+
+1. Fetches the current list of active clusters from the Kubernetes backend.
+2. For each cluster **in parallel**, fetches all resources and translates them to entities.
+3. Reads the previous entity-ref set for that cluster from the cache (`CacheService`).
+4. Computes `added` (new refs not in cache) and `removed` (cached refs no longer present).
+5. Applies a `type: delta` mutation and writes the updated ref set back to the cache.
+
+Because the cache is read before the Catalog is touched, **clusters that have not yet been returned by `getClusters()` are never affected**. Their cached entity-ref sets are left intact, so entities from slow-registering clusters (e.g. a dynamic provider like SpectroCloud) survive Backstage restarts.
+
+#### Orphan Grace Period
+
+Clusters can temporarily disappear from `getClusters()` — for example during a rolling restart of a dynamic cluster provider, or due to transient network issues. The orphan grace period prevents premature entity deletion in these situations.
+
+```yaml
+kubernetesIngestor:
+  orphanProtection:
+    gracePeriodRuns: 3  # Default: 3
+```
+
+| Value | Behavior |
+|-------|----------|
+| `3` (default) | A cluster must be absent from 3 consecutive scheduled runs before its entities are removed |
+| `0` | Grace period disabled — entities are removed on the first run where the cluster is missing |
+| `5+` | Suitable for environments with slow cluster registration or unstable connectivity |
+
+#### Production: Redis/Memcached Recommended
+
+In development (no cache backend configured), the plugin uses an in-memory cache. This works correctly for a single Backstage instance — the first run after startup is treated as all-adds and the diff stabilises after the first successful pass.
+
+In production deployments with **multiple Backstage replicas**, configure a shared cache backend (Redis or Memcached) so all replicas read and write the same entity-ref state:
+
+```yaml
+# app-config.yaml (Backstage cache configuration)
+backend:
+  cache:
+    store: redis
+    connection: redis://redis-host:6379
+```
+
+Without a shared cache in a multi-replica setup, whichever replica wins the scheduler lock starts from an empty diff on every leadership handoff. The diff still converges correctly (all-adds on the first run, stable thereafter), but entities from clusters discovered during a previous run on a different replica may be temporarily removed and re-added.
+
+#### How it survives restarts
+
+```
+Warm cache from previous session
+  T+10s: getClusters() = [static-1, static-2]     ← sa-cluster-1 not yet registered
+         → diff only for static-1, static-2
+         → sa-cluster-1 entities UNTOUCHED (cache never read for it)
+
+  T+20s: getClusters() = [static-1, static-2, sa-cluster-1]
+         → diff for sa-cluster-1 against its cached refs
+         → all entities fully up to date
+```
+
+---
+
+### Event-Driven Delta Updates
+
+The `KubernetesEntityProvider` also supports incremental catalog updates via its `deltaUpdate` method. Instead of waiting for the next scheduled cycle, external systems (e.g. Kubernetes controllers, webhooks, or CI/CD pipelines) can push individual resource changes to the provider in real time.
+
+Enable this feature by configuring a Backstage events topic:
+
+```yaml
+kubernetesIngestor:
+  events:
+    topic: kubernetes-ingestor-delta
+```
+
+#### DeltaEvent Interface
 
 ```typescript
 import { DeltaEvent } from '@terasky/backstage-plugin-kubernetes-ingestor';
@@ -1044,7 +1126,7 @@ const event: DeltaEvent = {
 };
 ```
 
-### Usage
+#### Usage
 
 ```typescript
 // Obtain a reference to the provider instance
@@ -1071,7 +1153,7 @@ await provider.deltaUpdate({
 });
 ```
 
-### Delete with Explicit Entity Names
+#### Delete with Explicit Entity Names
 
 When the original resource used annotation-based naming (e.g., `terasky.backstage.io/name`), synthesizing a resource for deletion may not produce matching entity names. In this case, provide the exact entity refs:
 
@@ -1089,11 +1171,11 @@ await provider.deltaUpdate({
 });
 ```
 
-### Behavior Notes
+#### Behavior Notes
 
-- **Prerequisites**: The initial full sync must complete before delta updates are accepted. Calling `deltaUpdate` before the first sync throws an error.
+- **Prerequisites**: The initial periodic sync must complete before event-driven delta updates are accepted. Calling `deltaUpdate` before the first sync throws an error.
 - **Shared System entities**: When deleting a resource, the provider automatically filters out shared `System` entities from the removal list. System entities represent namespaces/clusters and are shared across multiple resources — removing them on a single resource deletion would break other entities referencing the same system.
-- **Concurrency**: Delta mutations are serialized via an internal mutex to prevent race conditions with concurrent updates or full syncs.
+- **Concurrency**: All mutations (periodic sync and event-driven) are serialized via an internal mutex to prevent race conditions.
 - **Resource classification**: The provider uses cached lookups (Crossplane XRD kinds, KRO RGD kinds, CRD plural mappings) to classify resources correctly. These caches use composite keys (e.g., `group|kind`) to avoid collisions when the same Kind exists in different API groups.
 
 ## Best Practices

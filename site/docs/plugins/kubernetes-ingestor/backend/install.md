@@ -138,7 +138,22 @@ kubernetesIngestor:
     ingestOnlyAsAPI: false  # Set to true to skip template generation
   
   argoIntegration: true
+
+  # Orphan protection for delta-based ingestion (optional, default: 3)
+  # Clusters absent from getClusters() for this many consecutive runs have
+  # their entities removed. Set to 0 for immediate removal.
+  orphanProtection:
+    gracePeriodRuns: 3
 ```
+
+> **Production note**: The plugin uses the Backstage `CacheService` to store per-cluster entity-ref sets across restarts and replicas. In development the default in-memory cache is sufficient. For production deployments with multiple replicas, configure a shared Redis or Memcached backend so all replicas share the same state:
+>
+> ```yaml
+> backend:
+>   cache:
+>     store: redis
+>     connection: redis://redis-host:6379
+> ```
 
 ### 5. Configure Git Integration
 
