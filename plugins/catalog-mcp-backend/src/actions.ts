@@ -97,6 +97,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Action 2: Get entities by annotation
@@ -172,6 +177,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Action 3: Get entity types for a specific kind
@@ -241,6 +251,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Action 4: Get all entities by kind and type
@@ -306,6 +321,11 @@ export function registerMcpActions(
           type: input.type,
         },
       };
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -390,6 +410,11 @@ export function registerMcpActions(
           fields: input.fields,
         },
       };
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 }

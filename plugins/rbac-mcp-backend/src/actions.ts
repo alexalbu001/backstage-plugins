@@ -113,6 +113,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Action 2: Get detailed information about a specific role
@@ -288,6 +293,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Action 3: List available permissions from all plugins
@@ -381,6 +391,11 @@ export function registerMcpActions(
           totalPermissions,
         },
       };
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -555,6 +570,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: true,
+      idempotent: false,
+      readOnly: false,
+    },
   });
 
   // Action 5: Assign permissions to a role
@@ -696,6 +716,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: true,
+      idempotent: false,
+      readOnly: false,
+    },
   });
 
   // Action 6: Create conditional permission
@@ -790,6 +815,11 @@ export function registerMcpActions(
           conditions: input.conditions,
         },
       };
+    },
+    attributes: {
+      destructive: true,
+      idempotent: false,
+      readOnly: false,
     },
   });
 
@@ -886,6 +916,11 @@ export function registerMcpActions(
           totalRules,
         },
       };
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -1040,6 +1075,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Action 9: List conditional policies
@@ -1121,6 +1161,11 @@ export function registerMcpActions(
           count: policies.length,
         },
       };
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -1357,6 +1402,11 @@ export function registerMcpActions(
         console.error('[RBAC MCP] create_role_with_permissions error:', error);
         throw error;
       }
+    },
+    attributes: {
+      destructive: true,
+      idempotent: false,
+      readOnly: false,
     },
   });
 }

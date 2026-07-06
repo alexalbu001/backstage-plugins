@@ -36,6 +36,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         },
       };
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get VCFA Projects
@@ -75,6 +80,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         throw new InputError(`Failed to get VCF Automation projects: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get VCFA Project Details
@@ -109,6 +119,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         throw new InputError(`Failed to get VCF Automation project details: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Supervisor Namespaces
@@ -141,6 +156,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         }
         throw new InputError(`Failed to get supervisor namespaces: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -176,6 +196,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         throw new InputError(`Failed to get supervisor namespace: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Deployments
@@ -208,6 +233,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         }
         throw new InputError(`Failed to get VCF Automation deployments: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -256,6 +286,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         }
         throw new InputError(`Failed to get VCF Automation deployment details: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -397,6 +432,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         };
       }
     },
+    attributes: {
+      destructive: true,
+      idempotent: false,
+      readOnly: false,
+    },
   });
 
   // Get Resource Details
@@ -432,6 +472,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         throw new InputError(`Failed to get resource details: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Supervisor Resources
@@ -464,6 +509,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         }
         throw new InputError(`Failed to get supervisor resources: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -498,6 +548,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         }
         throw new InputError(`Failed to get supervisor resource: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -543,6 +598,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         }
         throw new InputError(`Failed to get supervisor resource manifest: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -592,6 +652,11 @@ export function registerMcpActions(actionsRegistry: typeof actionsRegistryServic
         }
         throw new InputError(`Failed to update supervisor resource manifest: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: true,
+      idempotent: false,
+      readOnly: false,
     },
   });
 }

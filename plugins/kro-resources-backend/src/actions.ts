@@ -148,6 +148,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get KRO resources: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Events
@@ -237,6 +242,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get KRO resource events: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Resource Graph
@@ -293,6 +303,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get KRO resource graph: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 }

@@ -222,6 +222,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get cluster health: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // 2. Download Cluster Kubeconfig (Client/OIDC)
@@ -288,6 +293,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get kubeconfig: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -369,6 +379,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get profile pack details: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -465,6 +480,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to find clusters using profile: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // 5. List all clusters
@@ -506,6 +526,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to list clusters: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // 6. List all virtual clusters
@@ -541,6 +566,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to list virtual clusters: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // 7. List all projects
@@ -574,6 +604,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to list projects: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // 8. List cluster groups
@@ -601,6 +636,11 @@ export function registerMcpActions(
         if (error instanceof InputError || error instanceof NotAllowedError) throw error;
         throw new InputError(`Failed to list cluster groups: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -640,6 +680,11 @@ export function registerMcpActions(
         if (error instanceof InputError || error instanceof NotAllowedError) throw error;
         throw new InputError(`Failed to search profiles: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -691,6 +736,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get profile variables: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // 11. List profiles for project
@@ -730,6 +780,11 @@ export function registerMcpActions(
         if (error instanceof InputError || error instanceof NotAllowedError) throw error;
         throw new InputError(`Failed to list profiles for project: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -784,6 +839,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get pack manifest: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // 13. Get cluster profiles (pack metadata) for a cluster
@@ -834,6 +894,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get cluster profiles: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // 14. Get virtual cluster details (UID-based; catalog entity for virtual clusters optional if ingestor supports it)
@@ -874,6 +939,11 @@ export function registerMcpActions(
         if (error instanceof InputError || error instanceof NotAllowedError) throw error;
         throw new InputError(`Failed to get virtual cluster details: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -917,6 +987,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get virtual cluster kubeconfig: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // 16. Get cluster group details
@@ -944,6 +1019,11 @@ export function registerMcpActions(
         if (error instanceof InputError || error instanceof NotAllowedError) throw error;
         throw new InputError(`Failed to get cluster group: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -979,6 +1059,11 @@ export function registerMcpActions(
         if (error instanceof InputError || error instanceof NotAllowedError) throw error;
         throw new InputError(`Failed to list cloud accounts: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 }

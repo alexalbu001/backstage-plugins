@@ -268,6 +268,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get Crossplane resources: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Crossplane Events
@@ -348,6 +353,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get Crossplane events: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -448,6 +458,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get Crossplane resource graph: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 

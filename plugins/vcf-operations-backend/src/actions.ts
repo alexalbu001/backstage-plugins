@@ -50,6 +50,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get VCF Operations instances: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Resource Metrics
@@ -109,6 +114,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get resource metrics: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Latest Resource Metrics
@@ -162,6 +172,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get latest resource metrics: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Resource Details
@@ -203,6 +218,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get resource details: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Available Metrics
@@ -243,6 +263,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get available metrics: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -292,6 +317,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to search resources: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Find Resource By Name
@@ -338,6 +368,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to find resource by name: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Find Resource By Property
@@ -383,6 +418,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to find resource by property: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 }

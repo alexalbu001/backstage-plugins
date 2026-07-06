@@ -139,6 +139,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get parameter schema for a specific template
@@ -195,6 +200,11 @@ export function registerMcpActions(
           parameters: Array.isArray(parameters) ? parameters : [parameters],
         },
       };
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -333,6 +343,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: true,
+      idempotent: false,
+      readOnly: false,
+    },
   });
 
   // List all available scaffolder actions
@@ -413,6 +428,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get details for a specific scaffolder action
@@ -491,6 +511,11 @@ export function registerMcpActions(
           examples: action.examples || [],
         },
       };
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -609,6 +634,11 @@ export function registerMcpActions(
         },
       };
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get details for a specific template extension
@@ -722,6 +752,11 @@ export function registerMcpActions(
       throw new InputError(
         `No template extension found with name "${input.extensionName}". Use list_software_template_extensions to see available extensions.`
       );
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 }

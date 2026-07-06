@@ -49,6 +49,11 @@ export function registerMcpActions(
       const result = await aiRulesService.getAiRules(input.gitUrl, input.ruleTypes);
       return { output: result };
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get MCP Servers
@@ -80,6 +85,11 @@ export function registerMcpActions(
     action: async ({ input }) => {
       const result = await mcpService.getMCPServers(input.gitUrl);
       return { output: result };
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 }

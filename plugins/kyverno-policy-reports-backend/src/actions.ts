@@ -87,6 +87,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get policy reports: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Policy Details
@@ -132,6 +137,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get policy details: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -211,6 +221,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get Crossplane policy reports: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 }

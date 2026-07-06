@@ -136,6 +136,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get ScaleOps data for entity: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Cost Analysis for Entity
@@ -272,6 +277,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get cost analysis: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -428,6 +438,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get recommendations: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -649,6 +664,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get network usage: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Policy Definitions for Entity Workloads
@@ -795,6 +815,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get policy definitions: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 }

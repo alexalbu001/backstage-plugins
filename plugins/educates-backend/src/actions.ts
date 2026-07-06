@@ -42,6 +42,11 @@ export function registerMcpActions(
         throw new InputError(`Failed to get training portals: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
+    },
   });
 
   // Get Workshops
@@ -95,6 +100,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to get workshops: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: false,
+      idempotent: true,
+      readOnly: true,
     },
   });
 
@@ -169,6 +179,11 @@ export function registerMcpActions(
         }
         throw new InputError(`Failed to request workshop session: ${error instanceof Error ? error.message : String(error)}`);
       }
+    },
+    attributes: {
+      destructive: true,
+      idempotent: false,
+      readOnly: false,
     },
   });
 }
