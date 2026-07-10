@@ -12245,7 +12245,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@terasky/backstage-plugin-crossplane-common@npm:^1.4.5, @terasky/backstage-plugin-crossplane-common@npm:^1.4.6, @terasky/backstage-plugin-crossplane-common@workspace:plugins/crossplane-common":
+"@terasky/backstage-plugin-crossplane-common@npm:^1.4.6, @terasky/backstage-plugin-crossplane-common@workspace:plugins/crossplane-common":
   version: 0.0.0-use.local
   resolution: "@terasky/backstage-plugin-crossplane-common@workspace:plugins/crossplane-common"
   dependencies:
@@ -12271,7 +12271,7 @@ __metadata:
     "@backstage/plugin-catalog-node": "npm:^2.2.2"
     "@backstage/plugin-permission-common": "npm:^0.9.9"
     "@backstage/plugin-permission-node": "npm:^0.11.1"
-    "@terasky/backstage-plugin-crossplane-common": "npm:^1.4.5"
+    "@terasky/backstage-plugin-crossplane-common": "npm:^1.4.6"
     "@types/express": "npm:^4.17.22"
     "@types/pluralize": "npm:^0.0.33"
     "@types/supertest": "npm:^2.0.12"
