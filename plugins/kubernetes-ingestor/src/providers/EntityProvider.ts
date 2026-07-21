@@ -3258,14 +3258,14 @@ export class KubernetesEntityProvider implements EntityProvider {
           [`${prefix}/kubernetes-resource-name`]: resource.metadata.name,
           [`${prefix}/kubernetes-resource-api-version`]: resource.apiVersion,
           [`${prefix}/kubernetes-resource-namespace`]: resource.metadata.namespace || '',
-          ...customAnnotations,
-          ...argoAnnotations,
           ...(systemNameModel === 'cluster-namespace' || systemNamespaceModel === 'cluster' ? {
             'backstage.io/kubernetes-cluster': this.mapClusterName(resource.clusterName),
           } : {}),
           ...(resource.metadata.namespace ? {
             'backstage.io/kubernetes-namespace': resource.metadata.namespace,
-          } : {})
+          } : {}),
+          ...customAnnotations,
+          ...argoAnnotations,
         },
         tags: [`cluster:${normalizedClusterName}`, `kind:${resource.kind?.toLowerCase()}`, ...customTags],
       },
