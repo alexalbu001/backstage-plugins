@@ -940,7 +940,84 @@ describe('KubernetesEntityProvider', () => {
     });
   });
 
-  describe('component-annotations splitting', () => {
+  describe('component annotations', () => {
+    it.each([
+      ['Application', 'argoproj.io/v1alpha1'],
+      ['Deployment', 'apps/v1'],
+    ])(
+      'should allow custom annotations to override the generated namespace for %s resources',
+      async (kind, apiVersion) => {
+        const provider = new KubernetesEntityProvider(
+          { run: jest.fn() } as any,
+          mockLogger,
+          mockConfig,
+          mockResourceFetcher as any,
+        );
+
+        const mockResource = {
+          apiVersion,
+          kind,
+          metadata: {
+            name: 'test-workload',
+            namespace: 'argocd',
+            annotations: {
+              'terasky.backstage.io/component-annotations':
+                'backstage.io/kubernetes-namespace=my-target-namespace\ncustom.io/foo=bar',
+            },
+          },
+          spec: {},
+          clusterName: 'test-cluster',
+        };
+
+        const entities = await (
+          provider as any
+        ).translateKubernetesObjectsToEntities(mockResource);
+        const componentEntity = entities.find(
+          (e: any) => e.kind === 'Component',
+        );
+        expect(componentEntity).toBeDefined();
+        expect(
+          componentEntity.metadata.annotations[
+            'backstage.io/kubernetes-namespace'
+          ],
+        ).toBe('my-target-namespace');
+        expect(componentEntity.metadata.annotations['custom.io/foo']).toBe(
+          'bar',
+        );
+      },
+    );
+
+    it('should use the generated namespace when no custom override is supplied', async () => {
+      const provider = new KubernetesEntityProvider(
+        { run: jest.fn() } as any,
+        mockLogger,
+        mockConfig,
+        mockResourceFetcher as any,
+      );
+
+      const mockResource = {
+        apiVersion: 'argoproj.io/v1alpha1',
+        kind: 'Application',
+        metadata: {
+          name: 'test-application',
+          namespace: 'argocd',
+        },
+        spec: {},
+        clusterName: 'test-cluster',
+      };
+
+      const entities = await (
+        provider as any
+      ).translateKubernetesObjectsToEntities(mockResource);
+      const componentEntity = entities.find((e: any) => e.kind === 'Component');
+      expect(componentEntity).toBeDefined();
+      expect(
+        componentEntity.metadata.annotations[
+          'backstage.io/kubernetes-namespace'
+        ],
+      ).toBe('argocd');
+    });
+
     it('should split comma-separated component-annotations', async () => {
       const provider = new KubernetesEntityProvider(
         { run: jest.fn() } as any,
