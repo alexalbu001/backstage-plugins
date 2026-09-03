@@ -549,4 +549,31 @@ Schema:
       expect(screen.getByText('default: 3')).toBeInTheDocument();
     });
   });
+
+  it('should preserve an explicitly configured null default', async () => {
+    const user = userEvent.setup();
+    const nullDefaultCrd = `
+Kind: MyResource
+Group: example.com
+Version: v1
+Schema:
+  Type: object
+  Properties:
+    spec:
+      Type: object
+      Properties:
+        nullableField:
+          Type: string
+          Default: null
+`;
+
+    await renderInTestApp(
+      <CrdDefinitionWidget definition={nullDefaultCrd} />,
+    );
+    await user.click(screen.getByText('+ expand all'));
+
+    await waitFor(() => {
+      expect(screen.getByText('default: null')).toBeInTheDocument();
+    });
+  });
 });

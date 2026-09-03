@@ -212,8 +212,12 @@ function normalizeSchema(schema: CRDSchema): CRDSchema {
     Properties: schema.Properties || schema.properties,
     Items: schema.Items || (schema.items ? { Schema: schema.items } : undefined),
     Required: schema.Required || schema.required,
-    // Nullish coalescing, not ||, so a falsy default (false, 0, "") is preserved.
-    Default: schema.Default ?? schema.default,
+    // Select by key presence, not ??, so a falsy default (false, 0, "") and an
+    // explicitly configured `Default: null` are both preserved rather than
+    // being treated as absent and dropped.
+    Default: Object.prototype.hasOwnProperty.call(schema, 'Default')
+      ? schema.Default
+      : schema.default,
     Enum: schema.Enum ?? schema.enum,
   };
 }
