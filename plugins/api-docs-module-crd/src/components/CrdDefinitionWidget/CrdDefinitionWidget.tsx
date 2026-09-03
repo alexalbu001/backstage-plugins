@@ -205,6 +205,12 @@ function getDescription(schema: CRDSchema): string {
   return schema.Description?.trim() || schema.description?.trim() || '_No Description Provided._';
 }
 
+/**
+ * Collapses the two schema key casings this widget accepts into one canonical
+ * shape. The simplified format uses capitalised keys (Type, Properties, …) and
+ * the Kubernetes openAPIV3Schema format uses lowercase ones; every consumer
+ * reads the capitalised fields returned here.
+ */
 function normalizeSchema(schema: CRDSchema): CRDSchema {
   return {
     Type: schema.Type || schema.type,
@@ -411,6 +417,11 @@ interface SchemaPartProps {
   collapseAll: boolean;
 }
 
+/**
+ * Renders a single schema property as an expandable accordion: its name, type,
+ * required flag, default and enum allowed values, description, and, recursively,
+ * any nested object or array-item properties.
+ */
 const SchemaPart: React.FC<SchemaPartProps> = ({
   propertyKey,
   property,
